@@ -1,0 +1,183 @@
+# Snipe Architecture
+# D2 diagram: https://d2lang.com
+
+direction: down
+
+title: {
+  label: Snipe: Code Navigation CLI for LLMs
+  near: top-center
+  shape: text
+  style.font-size: 24
+  style.bold: true
+}
+
+# External inputs
+user: User/LLM {
+  shape: person
+  style.fill: "#e1f5fe"
+}
+
+codebase: Go Codebase {
+  shape: cylinder
+  style.fill: "#fff3e0"
+}
+
+# CLI Layer
+cli: snipe CLI {
+  style.fill: "#e8f5e9"
+  style.stroke: "#2e7d32"
+  style.stroke-width: 2
+
+  commands: {
+    label: Commands
+    style.fill: "#c8e6c9"
+
+    index: index
+    search: search
+    def: def
+    refs: refs
+    callers: callers
+    callees: callees
+    show: show
+    context: context
+    doctor: doctor
+  }
+
+  flags: {
+    label: Global Flags
+    style.fill: "#c8e6c9"
+
+    json: --json
+    human: --human
+    limit: --limit N
+    context_flag: --context N
+    with_body: --with-body
+  }
+}
+
+# Processing Layer
+processing: Processing {
+  style.fill: "#fce4ec"
+  style.stroke: "#c2185b"
+
+  rg: ripgrep (rg) {
+    shape: hexagon
+    style.fill: "#f8bbd9"
+    label: "Text Search\n(shell out)"
+  }
+
+  go_analysis: go/packages {
+    shape: hexagon
+    style.fill: "#f8bbd9"
+    label: "Static Analysis\ngo/types"
+  }
+
+  embeddings: Embeddings {
+    shape: hexagon
+    style.fill: "#f8bbd9"
+    style.stroke-dash: 3
+    label: "Semantic Search\n(optional)"
+  }
+}
+
+# Storage Layer
+storage: SQLite Index {
+  shape: cylinder
+  style.fill: "#e3f2fd"
+  style.stroke: "#1565c0"
+  style.stroke-width: 2
+
+  symbols: symbols {
+    shape: sql_table
+    id: id TEXT PK
+    name: name TEXT
+    kind: kind TEXT
+    file_path: file_path TEXT
+    signature: signature TEXT
+  }
+
+  refs: refs {
+    shape: sql_table
+    id: id TEXT PK
+    symbol_id: symbol_id FK
+    file_path: file_path TEXT
+    line: line INT
+    enclosing_id: enclosing_id FK
+  }
+
+  call_graph: call_graph {
+    shape: sql_table
+    caller_id: caller_id FK
+    callee_id: callee_id FK
+    file_path: file_path TEXT
+    line: line INT
+  }
+
+  meta: meta {
+    shape: sql_table
+    key: key TEXT PK
+    value: value TEXT
+  }
+}
+
+# Output Layer
+output: JSON Output {
+  style.fill: "#fff8e1"
+  style.stroke: "#f9a825"
+  style.stroke-width: 2
+
+  response: {
+    label: Response
+    style.fill: "#ffecb3"
+
+    results: "results[]"
+    meta_out: "meta{}"
+    error: "error{}"
+  }
+
+  edit_target: {
+    label: edit_target
+    style.fill: "#ffecb3"
+    target: "file:line:col-line:col"
+  }
+}
+
+# Connections
+user -> cli: "snipe refs ProcessOrder"
+codebase -> processing.go_analysis: parse
+codebase -> processing.rg: grep
+
+cli.commands.index -> processing.go_analysis: analyze
+cli.commands.search -> processing.rg: pattern
+cli.commands.def -> storage: lookup
+cli.commands.refs -> storage: query
+cli.commands.callers -> storage: join
+cli.commands.callees -> storage: join
+
+processing.go_analysis -> storage: write symbols/refs
+processing.rg -> output: stream results
+processing.embeddings -> storage: similarity search {
+  style.stroke-dash: 3
+}
+
+storage -> output: query results
+output -> user: JSON response
+
+# Data flow annotations
+cli -> output: {
+  style.stroke: "#388e3c"
+  style.stroke-width: 2
+  label: "<50ms queries"
+}
+
+# Legend
+legend: {
+  label: Legend
+  near: bottom-right
+  style.fill: "#fafafa"
+
+  solid: "Solid = implemented"
+  dashed: "Dashed = optional/future" {
+    style.stroke-dash: 3
+  }
+}
